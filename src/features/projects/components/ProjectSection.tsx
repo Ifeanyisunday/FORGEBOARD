@@ -3,18 +3,36 @@
 import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/Button";
 import { useProjects } from "@/features/projects/hooks/useProjects";
-import { FolderKanban, Plus, X } from "lucide-react";
+import type { Project } from "@/features/projects/types";
+import {
+  FolderKanban,
+  Plus,
+  X,
+  Pencil,
+  Trash2,
+} from "lucide-react";
 
 export function ProjectSection() {
-  const { projects, createProject, isLoaded, storageError } = useProjects();
+  const {
+    projects,
+    createProject,
+    updateProject,
+    deleteProject,
+    isLoaded,
+    storageError,
+  } = useProjects();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingProject, setEditingProject] = useState<Project | null>(null);
+  const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
+
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
 
-  function openModal() {
+  function openCreateModal() {
+    setEditingProject(null);
     setName("");
     setDescription("");
     setError("");
@@ -22,33 +40,84 @@ export function ProjectSection() {
     setIsModalOpen(true);
   }
 
+  function openEditModal(project: Project) {
+    setEditingProject(project);
+    setName(project.name);
+    setDescription(
+      project.description === "No description added yet"
+        ? ""
+        : project.description,
+    );
+    setError("");
+    setSuccessMessage("");
+    setIsModalOpen(true);
+  }
+
   function closeModal() {
     setIsModalOpen(false);
+    setEditingProject(null);
     setError("");
   }
 
-  function handleCreateProject(event: FormEvent<HTMLFormElement>) {
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    const result = createProject(name, description);
+    if (editingProject) {
+      const result = updateProject(
+        editingProject.id,
+        name,
+        description,
+      );
 
-    if (!result.success) {
-      setError(result.message);
-      return;
+      if (!result.success) {
+        setError(result.message);
+        return;
+      }
+
+      setSuccessMessage(
+        `"${result.project.name}" was updated successfully.`,
+      );
+    } else {
+      const result = createProject(name, description);
+
+      if (!result.success) {
+        setError(result.message);
+        return;
+      }
+
+      setSuccessMessage(
+        `"${result.project.name}" was created successfully.`,
+      );
     }
 
     setName("");
     setDescription("");
     setError("");
+    setEditingProject(null);
     setIsModalOpen(false);
-    setSuccessMessage(`"${result.project.name}" was added successfully.`);
+  }
+
+  function handleDeleteProject() {
+    if (!projectToDelete) return;
+
+    const deleted = deleteProject(projectToDelete.id);
+
+    setSuccessMessage(
+      deleted
+        ? `"${projectToDelete.name}" was deleted successfully.`
+        : "The project could not be found.",
+    );
+
+    setProjectToDelete(null);
   }
 
   return (
     <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm shadow-gray-100/50">
       <div className="flex flex-col gap-4 border-b border-gray-200 px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
         <div>
-          <h3 className="font-semibold text-gray-950">Recent projects</h3>
+          <h3 className="font-semibold text-gray-950">
+            Recent projects
+          </h3>
           <p className="mt-1 text-sm text-gray-500">
             Track progress across your team's work.
           </p>
@@ -56,7 +125,7 @@ export function ProjectSection() {
 
         <Button
           type="button"
-          onClick={openModal}
+          onClick={openCreateModal}
           disabled={!isLoaded}
           className="w-full sm:w-auto"
         >
@@ -92,14 +161,21 @@ export function ProjectSection() {
         </div>
       ) : projects.length === 0 ? (
         <div className="px-6 py-12 text-center">
-          <FolderKanban size={32} className="mx-auto text-gray-400" />
+          <FolderKanban
+            size={32}
+            className="mx-auto text-gray-400"
+          />
           <h4 className="mt-3 font-semibold text-gray-900">
             No projects yet
           </h4>
           <p className="mt-1 text-sm text-gray-500">
             Create your first project to get started.
           </p>
-          <Button type="button" className="mt-4" onClick={openModal}>
+          <Button
+            type="button"
+            className="mt-4"
+            onClick={openCreateModal}
+          >
             Create your first project
           </Button>
         </div>
@@ -149,29 +225,56 @@ export function ProjectSection() {
                   />
                 </div>
               </div>
+
+              <div className="flex items-center gap-2 lg:shrink-0">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => openEditModal(project)}
+                  aria-label={`Edit ${project.name}`}
+                >
+                  <Pencil size={14} className="mr-1.5" />
+                  Edit
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="danger"
+                  size="sm"
+                  onClick={() => setProjectToDelete(project)}
+                  aria-label={`Delete ${project.name}`}
+                >
+                  <Trash2 size={14} className="mr-1.5" />
+                  Delete
+                </Button>
+              </div>
             </article>
           ))}
         </div>
       )}
 
+      {/* Create and Edit Dialog */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-gray-950/50 p-4">
           <section
             role="dialog"
             aria-modal="true"
-            aria-labelledby="create-project-title"
+            aria-labelledby="project-dialog-title"
             className="my-auto w-full max-w-lg rounded-2xl border border-gray-200 bg-white shadow-2xl"
           >
             <div className="flex items-start justify-between gap-4 border-b border-gray-100 px-5 py-5 sm:px-6">
               <div>
                 <h2
-                  id="create-project-title"
+                  id="project-dialog-title"
                   className="text-lg font-semibold text-gray-950"
                 >
-                  Create a project
+                  {editingProject ? "Edit project" : "Create a project"}
                 </h2>
                 <p className="mt-1 text-sm text-gray-500">
-                  Give your team a place to organise its work.
+                  {editingProject
+                    ? "Update your project details."
+                    : "Give your team a place to organise its work."}
                 </p>
               </div>
 
@@ -187,7 +290,7 @@ export function ProjectSection() {
             </div>
 
             <form
-              onSubmit={handleCreateProject}
+              onSubmit={handleSubmit}
               className="space-y-5 p-5 sm:p-6"
             >
               <div>
@@ -197,6 +300,7 @@ export function ProjectSection() {
                 >
                   Project name <span className="text-red-600">*</span>
                 </label>
+
                 <input
                   id="project-name"
                   name="name"
@@ -224,16 +328,20 @@ export function ProjectSection() {
                     (optional)
                   </span>
                 </label>
+
                 <textarea
                   id="project-description"
                   name="description"
                   rows={4}
                   maxLength={500}
                   value={description}
-                  onChange={(event) => setDescription(event.target.value)}
+                  onChange={(event) =>
+                    setDescription(event.target.value)
+                  }
                   placeholder="What is this project about?"
                   className="w-full resize-y rounded-lg border border-gray-300 px-3 py-2.5 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
                 />
+
                 <p className="mt-1 text-right text-xs text-gray-400">
                   {description.length}/500
                 </p>
@@ -257,11 +365,68 @@ export function ProjectSection() {
                 >
                   Cancel
                 </Button>
-                <Button type="submit" className="w-full sm:w-auto">
-                  Create project
+
+                <Button
+                  type="submit"
+                  className="w-full sm:w-auto"
+                >
+                  {editingProject ? "Save changes" : "Create project"}
                 </Button>
               </div>
             </form>
+          </section>
+        </div>
+      )}
+
+      {/* Delete Confirmation Dialog */}
+      {projectToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-950/50 p-4">
+          <section
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="delete-project-title"
+            aria-describedby="delete-project-description"
+            className="w-full max-w-md rounded-2xl border border-gray-200 bg-white p-6 shadow-2xl"
+          >
+            <div className="flex h-11 w-11 items-center justify-center rounded-full bg-red-50 text-red-600">
+              <Trash2 size={20} />
+            </div>
+
+            <h2
+              id="delete-project-title"
+              className="mt-4 text-lg font-semibold text-gray-950"
+            >
+              Delete this project?
+            </h2>
+
+            <p
+              id="delete-project-description"
+              className="mt-2 text-sm leading-6 text-gray-500"
+            >
+              You're about to delete{" "}
+              <span className="font-semibold text-gray-900">
+                {projectToDelete.name}
+              </span>
+              . This action cannot be undone.
+            </p>
+
+            <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setProjectToDelete(null)}
+              >
+                Cancel
+              </Button>
+
+              <Button
+                type="button"
+                variant="danger"
+                onClick={handleDeleteProject}
+              >
+                Delete project
+              </Button>
+            </div>
           </section>
         </div>
       )}
